@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { CalendarRange, Lock, ShieldCheck, Sparkles, Target, Timer } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { CalendarRange, ChevronLeft, ChevronRight, Lock, Quote, ShieldCheck, Sparkles, Target, Timer } from 'lucide-react'
 import { ShieldRing } from './shield-ring'
 import { useModal } from './modal-provider'
 import { DurationFields, EMPTY_DURATION, durationToMs, type Duration } from './duration-fields'
@@ -285,20 +285,109 @@ function Colon() {
 
 function QuoteCard() {
   const [index, setIndex] = useState(0)
+  const [paused, setPaused] = useState(false)
+  const [leaving, setLeaving] = useState(false)
+  const swapTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const total = QUOTES.length
+
+  useEffect(() => {
+    const now = new Date()
+    const dayOfYear = Math.floor((now.getTime() - new Date(now.getFullYear(), 0, 0).getTime()) / 86_400_000)
+    setIndex((dayOfYear * 7) % total)
+    return () => {
+      if (swapTimer.current) clearTimeout(swapTimer.current)
+    }
+  }, [total])
+
+  const go = useCallback(
+    (step: number) => {
+      if (swapTimer.current) clearTimeout(swapTimer.current)
+      setLeaving(true)
+      swapTimer.current = setTimeout(() => {
+        setIndex((i) => (i + step + total) % total)
+        setLeaving(false)
+      }, 260)
+    },
+    [total],
+  )
+
   return (
-    <section className="neo-card flex flex-col justify-center gap-4 rounded-2xl border border-border p-6 lg:col-span-2">
-      <h2 className="text-lg font-semibold">Daily Focus Motivation</h2>
-      <blockquote className="min-h-24 text-pretty italic leading-relaxed text-muted-foreground">
-        &quot;{QUOTES[index]}&quot;
-      </blockquote>
-      <button
-        type="button"
-        onClick={() => setIndex((i) => (i + 1) % QUOTES.length)}
-        className="inline-flex w-fit items-center gap-2 text-sm font-medium text-primary hover:underline"
-      >
-        <Sparkles className="size-4" />
-        Next Quote ✨
-      </button>
+    <section
+      aria-label="Daily Focus Motivation"
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+      onFocus={() => setPaused(true)}
+      onBlur={() => setPaused(false)}
+      className="neo-card relative flex flex-col justify-between gap-6 overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/15 via-card to-card p-6 lg:col-span-2"
+    >
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -right-16 -top-16 size-56 rounded-full bg-primary/25 blur-3xl"
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -bottom-20 -left-10 size-48 rounded-full bg-glow/10 blur-3xl"
+      />
+      <Quote
+        aria-hidden
+        className="pointer-events-none absolute right-5 top-14 size-28 rotate-180 fill-primary/10 text-primary/10"
+      />
+
+      <header className="relative flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <span className="grid size-8 place-items-center rounded-lg border border-primary/30 bg-primary/15 text-primary shadow-[0_0_16px_-4px_var(--primary)]">
+            <Sparkles className="size-4" />
+          </span>
+          <h2 className="text-lg font-semibold">Daily Focus Motivation</h2>
+        </div>
+      </header>
+
+      <div className="relative min-h-32">
+        <blockquote
+          key={index}
+          aria-live="polite"
+          className={cn(
+            'text-pretty font-sans text-xl font-medium leading-snug tracking-tight text-foreground transition-all duration-[260ms] ease-in md:text-2xl',
+            leaving ? '-translate-y-2 opacity-0 blur-sm' : 'animate-quote-in',
+          )}
+        >
+          <span className="bg-gradient-to-r from-foreground via-foreground to-primary bg-clip-text">
+            {QUOTES[index]}
+          </span>
+        </blockquote>
+      </div>
+
+      <footer className="relative flex items-center justify-between gap-4">
+        <div
+          aria-hidden
+          className="relative h-1 w-24 overflow-hidden rounded-full bg-muted-foreground/20 sm:w-40"
+        >
+          <span
+            key={index}
+            onAnimationEnd={() => go(1)}
+            className="animate-quote-progress absolute inset-y-0 left-0 w-full origin-left rounded-full bg-primary shadow-[0_0_10px_var(--primary)]"
+            style={{ animationPlayState: paused || leaving ? 'paused' : 'running' }}
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => go(-1)}
+            aria-label="Previous quote"
+            className="grid size-9 place-items-center rounded-lg border border-border bg-sidebar/70 text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
+          >
+            <ChevronLeft className="size-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => go(1)}
+            className="inline-flex h-9 items-center gap-2 rounded-lg border border-primary/40 bg-primary/15 px-3.5 text-sm font-medium text-primary transition-colors hover:bg-primary/25"
+          >
+            Next Quote
+            <ChevronRight className="size-4" />
+          </button>
+        </div>
+      </footer>
     </section>
   )
 }

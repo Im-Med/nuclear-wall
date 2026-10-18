@@ -169,6 +169,42 @@
   }
 }
 
+@keyframes quote-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+  .animate-quote-in {
+  animation: quote-in 0.6s cubic-bezier(0.2, 0.6, 0.3, 1) both;
+  }
+
+  @keyframes quote-progress {
+  from {
+  transform: scaleX(0);
+  }
+  to {
+  transform: scaleX(1);
+  }
+  }
+
+  .animate-quote-progress {
+  animation: quote-progress 10s linear forwards;
+  }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-quote-in {
+    animation: none;
+  }
+}
+
 .animate-pulse-ring {
   animation: pulse-ring 2.8s cubic-bezier(0.2, 0.6, 0.3, 1) infinite;
 }

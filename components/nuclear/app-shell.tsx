@@ -89,6 +89,7 @@ export function AppShell() {
             title={pageMeta[page].title}
             subtitle={pageMeta[page].subtitle}
             onOpenDrawer={() => setDrawerOpen(true)}
+            onNavigate={setPage}
           />
           <main className="relative min-h-0 flex-1 overflow-y-auto pb-20 lg:pb-0">
             <div

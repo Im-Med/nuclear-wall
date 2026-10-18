@@ -6,19 +6,40 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react'
-import type { AppSettings, Mode, ModeKind, ModeScope, NuclearState, Preset } from './nuclear-types'
+import type {
+  ActivityItem,
+  ActivityKind,
+  AppSettings,
+  Mode,
+  ModeKind,
+  ModeScope,
+  NuclearState,
+  Preset,
+} from './nuclear-types'
 import {
   createBuiltInMode,
   createCustomMode,
   createDefaultState,
   createPresetModes,
 } from './nuclear-data'
-import { uid } from './nuclear-utils'
+import { formatCompact, isModeInWindow, uid } from './nuclear-utils'
 
 const STORAGE_KEY = 'nw:state:v2'
+const MAX_ACTIVITY = 30
+
+function logActivity(
+  prev: NuclearState,
+  kind: ActivityKind,
+  title: string,
+  body: string,
+): ActivityItem[] {
+  const item: ActivityItem = { id: uid('act'), kind, title, body, at: Date.now(), read: false }
+  return [item, ...(prev.activity ?? [])].slice(0, MAX_ACTIVITY)
+}
 
 interface NuclearContextValue {
   state: NuclearState
@@ -46,6 +67,8 @@ interface NuclearContextValue {
   setPin: (pin: string) => void
   updateSettings: (patch: Partial<AppSettings>) => void
   resetAll: () => void
+  markActivityRead: () => void
+  clearActivity: () => void
 }
 
 const NuclearContext = createContext<NuclearContextValue | null>(null)
@@ -109,13 +132,66 @@ export function NuclearProvider({ children }: { children: ReactNode }) {
       const commitmentDone = prev.commitment !== null && now >= prev.commitment.endAt
       const lockDone = prev.scheduleLockEndAt !== null && now >= prev.scheduleLockEndAt
       if (!commitmentDone && !lockDone) return prev
+      let activity = prev.activity
+      if (commitmentDone) {
+        activity = logActivity(
+          { ...prev, activity },
+          'done',
+          'Commitment complete',
+          'Your lock has ended. Nice work staying focused.',
+        )
+      }
+      if (lockDone) {
+        activity = logActivity(
+          { ...prev, activity },
+          'done',
+          'Schedule unlocked',
+          'The schedule lock has ended. You can edit it again.',
+        )
+      }
       return {
         ...prev,
+        activity,
         commitment: commitmentDone ? null : prev.commitment,
         scheduleLockEndAt: lockDone ? null : prev.scheduleLockEndAt,
       }
     })
   }, [hydrated, now])
+
+  const runningModeIds = useRef<Set<string> | null>(null)
+  useEffect(() => {
+    if (!hydrated || now === 0) return
+    const preset = state.presets.find((p) => p.id === state.activePresetId) ?? state.presets[0]
+    const current = new Set(
+      state.scheduleEnabled
+        ? preset.modes.filter((m) => m.enabled && isModeInWindow(m, now)).map((m) => m.id)
+        : [],
+    )
+    const previous = runningModeIds.current
+    runningModeIds.current = current
+    if (previous === null) return
+    const started = preset.modes.filter((m) => current.has(m.id) && !previous.has(m.id))
+    const ended = state.scheduleEnabled
+      ? preset.modes.filter((m) => !current.has(m.id) && previous.has(m.id))
+      : []
+    if (started.length === 0 && ended.length === 0) return
+    setState((prev) => {
+      let next = prev
+      for (const m of started) {
+        next = {
+          ...next,
+          activity: logActivity(next, 'active', `${m.name} started`, 'Scheduled block is now running.'),
+        }
+      }
+      for (const m of ended) {
+        next = {
+          ...next,
+          activity: logActivity(next, 'done', `${m.name} ended`, 'Scheduled block has finished.'),
+        }
+      }
+      return next
+    })
+  }, [hydrated, now, state.presets, state.activePresetId, state.scheduleEnabled])
 
   const activePreset = useMemo(
     () => state.presets.find((p) => p.id === state.activePresetId) ?? state.presets[0],
@@ -129,7 +205,16 @@ export function NuclearProvider({ children }: { children: ReactNode }) {
     setState((prev) =>
       prev.scheduleEnabled || durationMs <= 0
         ? prev
-        : { ...prev, commitment: { startedAt, endAt: startedAt + durationMs } },
+        : {
+            ...prev,
+            commitment: { startedAt, endAt: startedAt + durationMs },
+            activity: logActivity(
+              prev,
+              'lock',
+              'Commitment lock started',
+              `Locked in for ${formatCompact(durationMs)}. It cannot be undone early.`,
+            ),
+          },
     )
   }, [])
 
@@ -140,10 +225,20 @@ export function NuclearProvider({ children }: { children: ReactNode }) {
         const blocked =
           (prev.commitment !== null && t < prev.commitment.endAt) ||
           prev.standalone.some((m) => m.active)
-        return blocked ? prev : { ...prev, scheduleEnabled: true }
+        return blocked
+          ? prev
+          : {
+              ...prev,
+              scheduleEnabled: true,
+              activity: logActivity(prev, 'info', 'Schedule turned on', 'Weekly blocks will now run automatically.'),
+            }
       }
       if (prev.scheduleLockEndAt !== null && t < prev.scheduleLockEndAt) return prev
-      return { ...prev, scheduleEnabled: false }
+      return {
+        ...prev,
+        scheduleEnabled: false,
+        activity: logActivity(prev, 'info', 'Schedule turned off', 'Weekly blocks are paused.'),
+      }
     })
   }, [])
 
@@ -152,7 +247,16 @@ export function NuclearProvider({ children }: { children: ReactNode }) {
     setNow(t)
     setState((prev) =>
       prev.scheduleEnabled && durationMs > 0
-        ? { ...prev, scheduleLockEndAt: t + durationMs }
+        ? {
+            ...prev,
+            scheduleLockEndAt: t + durationMs,
+            activity: logActivity(
+              prev,
+              'lock',
+              'Schedule locked',
+              `Editing is disabled for ${formatCompact(durationMs)}.`,
+            ),
+          }
         : prev,
     )
   }, [])
@@ -207,8 +311,17 @@ export function NuclearProvider({ children }: { children: ReactNode }) {
   const setModeEnabled = useCallback((id: string, enabled: boolean) => {
     setState((prev) => {
       if (prev.scheduleLockEndAt !== null && Date.now() < prev.scheduleLockEndAt) return prev
+      const target = prev.presets.find((p) => p.id === prev.activePresetId)?.modes.find((m) => m.id === id)
       return {
         ...prev,
+        activity: target
+          ? logActivity(
+              prev,
+              'info',
+              `${target.name} ${enabled ? 'added to' : 'removed from'} schedule`,
+              enabled ? 'It will appear in the weekly schedule.' : 'It is hidden and will not run.',
+            )
+          : prev.activity,
         presets: prev.presets.map((p) =>
           p.id === prev.activePresetId
             ? { ...p, modes: p.modes.map((m) => (m.id === id ? { ...m, enabled } : m)) }
@@ -268,8 +381,17 @@ export function NuclearProvider({ children }: { children: ReactNode }) {
     setState((prev) => {
       if (active && prev.scheduleEnabled) return prev
       if (!active && prev.commitment !== null && t < prev.commitment.endAt) return prev
+      const target = prev.standalone.find((m) => m.id === id)
       return {
         ...prev,
+        activity: target
+          ? logActivity(
+              prev,
+              active ? 'active' : 'done',
+              `${target.name} ${active ? 'started' : 'stopped'}`,
+              active ? 'Standalone session is running.' : 'Standalone session has ended.',
+            )
+          : prev.activity,
         standalone: prev.standalone.map((m) => (m.id === id ? { ...m, active } : m)),
       }
     })
@@ -288,7 +410,20 @@ export function NuclearProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const resetAll = useCallback(() => {
-    setState(createDefaultState())
+    const fresh = createDefaultState()
+    setState({ ...fresh, activity: logActivity(fresh, 'info', 'Data reset', 'All settings and modes were restored to defaults.') })
+  }, [])
+
+  const markActivityRead = useCallback(() => {
+    setState((prev) =>
+      (prev.activity ?? []).every((a) => a.read)
+        ? prev
+        : { ...prev, activity: prev.activity.map((a) => ({ ...a, read: true })) },
+    )
+  }, [])
+
+  const clearActivity = useCallback(() => {
+    setState((prev) => ((prev.activity ?? []).length === 0 ? prev : { ...prev, activity: [] }))
   }, [])
 
   const value: NuclearContextValue = {
@@ -316,6 +451,8 @@ export function NuclearProvider({ children }: { children: ReactNode }) {
     setPin,
     updateSettings,
     resetAll,
+    markActivityRead,
+    clearActivity,
   }
 
   return <NuclearContext.Provider value={value}>{children}</NuclearContext.Provider>
