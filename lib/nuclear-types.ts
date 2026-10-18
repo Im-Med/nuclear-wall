@@ -60,7 +60,21 @@ export interface InstalledApp {
   category: AppCategory
 }
 
+export type ActivityKind = 'info' | 'active' | 'done' | 'lock'
+
+export interface ActivityItem {
+  id: string
+  kind: ActivityKind
+  title: string
+  body: string
+  /** Epoch ms */
+  at: number
+  read: boolean
+}
+
 export interface NuclearState {
+  /** Newest first, capped in the store. */
+  activity: ActivityItem[]
   pin: string
   commitment: Commitment | null
   scheduleEnabled: boolean

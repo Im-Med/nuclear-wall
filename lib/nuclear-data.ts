@@ -246,6 +246,7 @@ export function createDefaultState(): NuclearState {
     { id: 'exam', name: 'Exam Week', modes: examModes() },
   ]
   return {
+    activity: [],
     pin: '1234',
     commitment: null,
     scheduleEnabled: false,

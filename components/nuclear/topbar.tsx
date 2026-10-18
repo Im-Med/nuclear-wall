@@ -1,6 +1,7 @@
 'use client'
 
-import { Bell, Menu, Search } from 'lucide-react'
+import { Menu, Search } from 'lucide-react'
+import { NotificationsMenu } from './notifications-menu'
 
 export function Topbar({
   title,
@@ -40,14 +41,7 @@ export function Topbar({
             ⌘K
           </kbd>
         </label>
-        <button
-          type="button"
-          aria-label="Notifications"
-          className="relative rounded-lg border border-border bg-card p-2 text-muted-foreground hover:text-foreground"
-        >
-          <Bell className="size-4" />
-          <span className="absolute top-1.5 right-1.5 size-1.5 rounded-full bg-primary shadow-[0_0_6px_var(--primary)]" />
-        </button>
+        <NotificationsMenu />
       </div>
     </header>
   )
