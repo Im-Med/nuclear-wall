@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { CalendarRange, ChevronLeft, ChevronRight, Lock, Quote, ShieldCheck, Sparkles, Target, Timer } from 'lucide-react'
 import { ShieldRing } from './shield-ring'
 import { useModal } from './modal-provider'
@@ -286,21 +286,30 @@ function Colon() {
 function QuoteCard() {
   const [index, setIndex] = useState(0)
   const [paused, setPaused] = useState(false)
+  const [leaving, setLeaving] = useState(false)
+  const swapTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const total = QUOTES.length
 
   useEffect(() => {
     const now = new Date()
     const dayOfYear = Math.floor((now.getTime() - new Date(now.getFullYear(), 0, 0).getTime()) / 86_400_000)
-    setIndex(dayOfYear % total)
+    setIndex((dayOfYear * 7) % total)
+    return () => {
+      if (swapTimer.current) clearTimeout(swapTimer.current)
+    }
   }, [total])
 
-  useEffect(() => {
-    if (paused) return
-    const timer = setInterval(() => setIndex((i) => (i + 1) % total), 12_000)
-    return () => clearInterval(timer)
-  }, [paused, total])
-
-  const go = (step: number) => setIndex((i) => (i + step + total) % total)
+  const go = useCallback(
+    (step: number) => {
+      if (swapTimer.current) clearTimeout(swapTimer.current)
+      setLeaving(true)
+      swapTimer.current = setTimeout(() => {
+        setIndex((i) => (i + step + total) % total)
+        setLeaving(false)
+      }, 260)
+    },
+    [total],
+  )
 
   return (
     <section
@@ -331,39 +340,34 @@ function QuoteCard() {
           </span>
           <h2 className="text-lg font-semibold">Daily Focus Motivation</h2>
         </div>
-        <span className="rounded-full border border-border bg-sidebar/70 px-2.5 py-1 font-sans text-[11px] tabular-nums text-muted-foreground">
-          {String(index + 1).padStart(2, '0')} / {String(total).padStart(2, '0')}
-        </span>
       </header>
 
-      <blockquote
-        key={index}
-        aria-live="polite"
-        className="animate-quote-in relative min-h-28 text-pretty font-sans text-xl font-medium leading-snug tracking-tight text-foreground md:text-2xl"
-      >
-        <span className="bg-gradient-to-r from-foreground via-foreground to-primary bg-clip-text">
-          {QUOTES[index]}
-        </span>
-      </blockquote>
+      <div className="relative min-h-32">
+        <blockquote
+          key={index}
+          aria-live="polite"
+          className={cn(
+            'text-pretty font-sans text-xl font-medium leading-snug tracking-tight text-foreground transition-all duration-[260ms] ease-in md:text-2xl',
+            leaving ? '-translate-y-2 opacity-0 blur-sm' : 'animate-quote-in',
+          )}
+        >
+          <span className="bg-gradient-to-r from-foreground via-foreground to-primary bg-clip-text">
+            {QUOTES[index]}
+          </span>
+        </blockquote>
+      </div>
 
       <footer className="relative flex items-center justify-between gap-4">
-        <div className="flex items-center gap-1.5" role="tablist" aria-label="Choose quote">
-          {QUOTES.map((_, i) => (
-            <button
-              key={i}
-              type="button"
-              role="tab"
-              aria-selected={i === index}
-              aria-label={`Show quote ${i + 1}`}
-              onClick={() => setIndex(i)}
-              className={cn(
-                'h-1.5 rounded-full transition-all duration-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
-                i === index
-                  ? 'w-6 bg-primary shadow-[0_0_10px_var(--primary)]'
-                  : 'w-1.5 bg-muted-foreground/30 hover:bg-muted-foreground/60',
-              )}
-            />
-          ))}
+        <div
+          aria-hidden
+          className="relative h-1 w-24 overflow-hidden rounded-full bg-muted-foreground/20 sm:w-40"
+        >
+          <span
+            key={index}
+            onAnimationEnd={() => go(1)}
+            className="animate-quote-progress absolute inset-y-0 left-0 w-full origin-left rounded-full bg-primary shadow-[0_0_10px_var(--primary)]"
+            style={{ animationPlayState: paused || leaving ? 'paused' : 'running' }}
+          />
         </div>
         <div className="flex items-center gap-2">
           <button

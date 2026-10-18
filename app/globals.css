@@ -182,9 +182,22 @@
   }
 }
 
-.animate-quote-in {
-  animation: quote-in 0.5s cubic-bezier(0.2, 0.6, 0.3, 1) both;
-}
+  .animate-quote-in {
+  animation: quote-in 0.6s cubic-bezier(0.2, 0.6, 0.3, 1) both;
+  }
+
+  @keyframes quote-progress {
+  from {
+  transform: scaleX(0);
+  }
+  to {
+  transform: scaleX(1);
+  }
+  }
+
+  .animate-quote-progress {
+  animation: quote-progress 10s linear forwards;
+  }
 
 @media (prefers-reduced-motion: reduce) {
   .animate-quote-in {
