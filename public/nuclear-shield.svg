@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="rim" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#e9d5ff"/>
+      <stop offset="45%" stop-color="#a855f7"/>
+      <stop offset="100%" stop-color="#22d3ee"/>
+    </linearGradient>
+    <linearGradient id="body" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#3b1470"/>
+      <stop offset="100%" stop-color="#12081f"/>
+    </linearGradient>
+    <linearGradient id="emblem" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#67e8f9"/>
+      <stop offset="100%" stop-color="#c084fc"/>
+    </linearGradient>
+  </defs>
+  <path d="M32 3 L55 10.5 V29 C55 44.5 45.5 55 32 61 C18.5 55 9 44.5 9 29 V10.5 Z" fill="url(#rim)"/>
+  <path d="M32 8.2 L50.2 14.2 V29.2 C50.2 41.6 42.6 50.4 32 55.6 C21.4 50.4 13.8 41.6 13.8 29.2 V14.2 Z" fill="url(#body)"/>
+  <g fill="url(#emblem)">
+    <path d="M34.25 29.1 L38 22.61 A12 12 0 0 1 44 33 L36.5 33 A4.5 4.5 0 0 0 34.25 29.1 Z"/>
+    <path d="M34.25 36.9 L38 43.39 A12 12 0 0 1 26 43.39 L29.75 36.9 A4.5 4.5 0 0 0 34.25 36.9 Z"/>
+    <path d="M27.5 33 L20 33 A12 12 0 0 1 26 22.61 L29.75 29.1 A4.5 4.5 0 0 0 27.5 33 Z"/>
+    <circle cx="32" cy="33" r="2.6"/>
+  </g>
+</svg>
