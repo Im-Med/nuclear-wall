@@ -27,6 +27,7 @@ import {
   createPresetModes,
 } from './nuclear-data'
 import { formatCompact, isModeInWindow, uid } from './nuclear-utils'
+import { postNativeCommand } from './native-bridge'
 
 const STORAGE_KEY = 'nw:state:v2'
 const MAX_ACTIVITY = 30
@@ -100,6 +101,8 @@ export function NuclearProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<NuclearState>(createDefaultState)
   const [hydrated, setHydrated] = useState(false)
   const [now, setNow] = useState(0)
+  const stateRef = useRef(state)
+  stateRef.current = state
 
   useEffect(() => {
     setState((prev) => loadState(prev))
@@ -202,6 +205,9 @@ export function NuclearProvider({ children }: { children: ReactNode }) {
   const startCommitment = useCallback((durationMs: number) => {
     const startedAt = Date.now()
     setNow(startedAt)
+    if (!stateRef.current.scheduleEnabled && durationMs > 0) {
+      postNativeCommand('commitment_lock', { durationMinutes: Math.max(1, Math.round(durationMs / 60000)) })
+    }
     setState((prev) =>
       prev.scheduleEnabled || durationMs <= 0
         ? prev
@@ -220,6 +226,11 @@ export function NuclearProvider({ children }: { children: ReactNode }) {
 
   const setScheduleEnabled = useCallback((enabled: boolean) => {
     const t = Date.now()
+    const current = stateRef.current
+    const allowed = enabled
+      ? !(current.commitment !== null && t < current.commitment.endAt) && !current.standalone.some((m) => m.active)
+      : !(current.scheduleLockEndAt !== null && t < current.scheduleLockEndAt)
+    if (allowed) postNativeCommand('schedule_set', { enabled })
     setState((prev) => {
       if (enabled) {
         const blocked =
@@ -347,6 +358,23 @@ export function NuclearProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const saveMode = useCallback((scope: ModeScope, mode: Mode) => {
+    const current = stateRef.current
+    const pool =
+      scope === 'standalone'
+        ? current.standalone
+        : (current.presets.find((p) => p.id === current.activePresetId)?.modes ?? [])
+    const before = pool.find((m) => m.id === mode.id)
+    if (before && JSON.stringify(before.sites) !== JSON.stringify(mode.sites)) {
+      const allModes = [...current.presets.flatMap((p) => p.modes), ...current.standalone].map((m) =>
+        m.id === mode.id ? mode : m,
+      )
+      const domains = Array.from(
+        new Set(allModes.flatMap((m) => m.sites.filter((s) => s.rule === 'allow').map((s) => s.domain))),
+      )
+      postNativeCommand('websites_update', {
+        websites: domains.map((domain) => ({ domain, action: 'allow' })),
+      })
+    }
     setState((prev) =>
       scope === 'standalone'
         ? { ...prev, standalone: prev.standalone.map((m) => (m.id === mode.id ? mode : m)) }
