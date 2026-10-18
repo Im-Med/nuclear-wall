@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { CalendarRange, Lock, ShieldCheck, Sparkles, Target, Timer } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { CalendarRange, ChevronLeft, ChevronRight, Lock, Quote, ShieldCheck, Sparkles, Target, Timer } from 'lucide-react'
 import { ShieldRing } from './shield-ring'
 import { useModal } from './modal-provider'
 import { DurationFields, EMPTY_DURATION, durationToMs, type Duration } from './duration-fields'
@@ -285,20 +285,105 @@ function Colon() {
 
 function QuoteCard() {
   const [index, setIndex] = useState(0)
+  const [paused, setPaused] = useState(false)
+  const total = QUOTES.length
+
+  useEffect(() => {
+    const now = new Date()
+    const dayOfYear = Math.floor((now.getTime() - new Date(now.getFullYear(), 0, 0).getTime()) / 86_400_000)
+    setIndex(dayOfYear % total)
+  }, [total])
+
+  useEffect(() => {
+    if (paused) return
+    const timer = setInterval(() => setIndex((i) => (i + 1) % total), 12_000)
+    return () => clearInterval(timer)
+  }, [paused, total])
+
+  const go = (step: number) => setIndex((i) => (i + step + total) % total)
+
   return (
-    <section className="neo-card flex flex-col justify-center gap-4 rounded-2xl border border-border p-6 lg:col-span-2">
-      <h2 className="text-lg font-semibold">Daily Focus Motivation</h2>
-      <blockquote className="min-h-24 text-pretty italic leading-relaxed text-muted-foreground">
-        &quot;{QUOTES[index]}&quot;
-      </blockquote>
-      <button
-        type="button"
-        onClick={() => setIndex((i) => (i + 1) % QUOTES.length)}
-        className="inline-flex w-fit items-center gap-2 text-sm font-medium text-primary hover:underline"
+    <section
+      aria-label="Daily Focus Motivation"
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+      onFocus={() => setPaused(true)}
+      onBlur={() => setPaused(false)}
+      className="neo-card relative flex flex-col justify-between gap-6 overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/15 via-card to-card p-6 lg:col-span-2"
+    >
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -right-16 -top-16 size-56 rounded-full bg-primary/25 blur-3xl"
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -bottom-20 -left-10 size-48 rounded-full bg-glow/10 blur-3xl"
+      />
+      <Quote
+        aria-hidden
+        className="pointer-events-none absolute right-5 top-14 size-28 rotate-180 fill-primary/10 text-primary/10"
+      />
+
+      <header className="relative flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <span className="grid size-8 place-items-center rounded-lg border border-primary/30 bg-primary/15 text-primary shadow-[0_0_16px_-4px_var(--primary)]">
+            <Sparkles className="size-4" />
+          </span>
+          <h2 className="text-lg font-semibold">Daily Focus Motivation</h2>
+        </div>
+        <span className="rounded-full border border-border bg-sidebar/70 px-2.5 py-1 font-sans text-[11px] tabular-nums text-muted-foreground">
+          {String(index + 1).padStart(2, '0')} / {String(total).padStart(2, '0')}
+        </span>
+      </header>
+
+      <blockquote
+        key={index}
+        aria-live="polite"
+        className="animate-quote-in relative min-h-28 text-pretty font-sans text-xl font-medium leading-snug tracking-tight text-foreground md:text-2xl"
       >
-        <Sparkles className="size-4" />
-        Next Quote ✨
-      </button>
+        <span className="bg-gradient-to-r from-foreground via-foreground to-primary bg-clip-text">
+          {QUOTES[index]}
+        </span>
+      </blockquote>
+
+      <footer className="relative flex items-center justify-between gap-4">
+        <div className="flex items-center gap-1.5" role="tablist" aria-label="Choose quote">
+          {QUOTES.map((_, i) => (
+            <button
+              key={i}
+              type="button"
+              role="tab"
+              aria-selected={i === index}
+              aria-label={`Show quote ${i + 1}`}
+              onClick={() => setIndex(i)}
+              className={cn(
+                'h-1.5 rounded-full transition-all duration-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
+                i === index
+                  ? 'w-6 bg-primary shadow-[0_0_10px_var(--primary)]'
+                  : 'w-1.5 bg-muted-foreground/30 hover:bg-muted-foreground/60',
+              )}
+            />
+          ))}
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => go(-1)}
+            aria-label="Previous quote"
+            className="grid size-9 place-items-center rounded-lg border border-border bg-sidebar/70 text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
+          >
+            <ChevronLeft className="size-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => go(1)}
+            className="inline-flex h-9 items-center gap-2 rounded-lg border border-primary/40 bg-primary/15 px-3.5 text-sm font-medium text-primary transition-colors hover:bg-primary/25"
+          >
+            Next Quote
+            <ChevronRight className="size-4" />
+          </button>
+        </div>
+      </footer>
     </section>
   )
 }
