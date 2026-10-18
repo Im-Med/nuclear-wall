@@ -6,6 +6,7 @@ import { Toggle } from './toggle'
 import { useModal } from './modal-provider'
 import { Notice, btnDanger, btnPrimary, inputClass } from './ui-bits'
 import { useNuclear } from '@/lib/nuclear-store'
+import { postNativeCommand, useNative } from '@/lib/native-bridge'
 import { cn } from '@/lib/utils'
 
 export function SettingsPage() {
@@ -63,6 +64,8 @@ export function SettingsPage() {
         </ul>
       </section>
 
+      <EnforcementSettings />
+
       <section className="neo-card flex flex-col gap-4 rounded-2xl border border-destructive/30 p-5 lg:col-span-2">
         <div>
           <h2 className="font-semibold">Reset all data</h2>
@@ -90,6 +93,83 @@ export function SettingsPage() {
         </button>
       </section>
     </div>
+  )
+}
+
+function EnforcementSettings() {
+  const { native, connected, patchNative } = useNative()
+  const { openModal } = useModal()
+  const [studyLockChoice, setStudyLockChoice] = useState(true)
+
+  const strict = native?.strict
+  const studyLockActive = strict?.studyLockActive === true
+  const lockDownloads = native?.downloads?.lockDownloads === true
+  const studyLockOn = studyLockActive || (strict?.studyLockEnabled ?? studyLockChoice)
+  const lockWindow = `${strict?.studyLockStart ?? '19:00'}–${strict?.studyLockEnd ?? '21:00'}`
+
+  const confirmWeakening = (title: string, apply: () => void) =>
+    openModal({
+      type: 'pin',
+      title,
+      description: 'Turning this protection off requires your admin PIN.',
+      onConfirm: apply,
+    })
+
+  const applyDownloads = (enabled: boolean) => {
+    patchNative((s) => ({ ...s, downloads: { ...s.downloads, lockDownloads: enabled } }))
+    postNativeCommand('downloads_set', { enabled })
+  }
+
+  const applyStudyLock = (enabled: boolean) => {
+    setStudyLockChoice(enabled)
+    patchNative((s) => ({
+      ...s,
+      strict: s.strict && { ...s.strict, studyLockEnabled: enabled },
+    }))
+    postNativeCommand('studylock_set', { enabled })
+  }
+
+  const rows = [
+    {
+      key: 'downloads',
+      title: 'Lock downloads (documents & images only)',
+      body: 'Only documents and images can be downloaded. Everything else is blocked.',
+      checked: lockDownloads,
+      disabled: !connected,
+      onChange: (on: boolean) =>
+        on ? applyDownloads(true) : confirmWeakening('Unlock downloads', () => applyDownloads(false)),
+    },
+    {
+      key: 'studylock',
+      title: `Study lock ${lockWindow}`,
+      body: studyLockActive
+        ? 'Running right now. It cannot be turned off until the window ends.'
+        : 'Blocks your distracting apps every day during this window.',
+      checked: studyLockOn,
+      disabled: !connected || studyLockActive,
+      onChange: (on: boolean) =>
+        on ? applyStudyLock(true) : confirmWeakening('Turn off study lock', () => applyStudyLock(false)),
+    },
+  ]
+
+  return (
+    <section className="neo-card flex flex-col gap-4 rounded-2xl border border-border p-5 lg:col-span-2">
+      <h2 className="font-semibold">Enforcement</h2>
+      {!connected && (
+        <Notice tone="info">These controls are available when Nuclear Wall runs inside the desktop app.</Notice>
+      )}
+      <ul className="flex flex-col divide-y divide-border">
+        {rows.map((r) => (
+          <li key={r.key} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
+            <div>
+              <p className="text-sm font-medium">{r.title}</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">{r.body}</p>
+            </div>
+            <Toggle checked={r.checked} onChange={r.onChange} label={r.title} disabled={r.disabled} />
+          </li>
+        ))}
+      </ul>
+    </section>
   )
 }
 

@@ -3,6 +3,8 @@
 import { useMemo, useState } from 'react'
 import { Plus, Search } from 'lucide-react'
 import { AppPicker } from './app-picker'
+import { NativeApps } from './native-apps'
+import { useNative } from '@/lib/native-bridge'
 import { SegmentedTabs } from './segmented-tabs'
 import { AppBadge, Checkbox, btnPrimary, inputClass } from './ui-bits'
 import { useNuclear } from '@/lib/nuclear-store'
@@ -13,6 +15,11 @@ import { cn } from '@/lib/utils'
 type Tab = 'allowlist' | 'installed'
 
 export function AppsPage() {
+  const { native } = useNative()
+  return native?.strict?.catalog ? <NativeApps /> : <LocalAppsPage />
+}
+
+function LocalAppsPage() {
   const { state, activePreset, setAllowlist } = useNuclear()
   const [tab, setTab] = useState<Tab>('allowlist')
   const [pickerOpen, setPickerOpen] = useState(false)

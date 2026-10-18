@@ -2,6 +2,7 @@ import { Analytics } from '@vercel/analytics/next'
 import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import { ModalProvider } from '@/components/nuclear/modal-provider'
+import { NativeBridgeProvider } from '@/lib/native-bridge'
 import { NuclearProvider } from '@/lib/nuclear-store'
 import './globals.css'
 
@@ -32,9 +33,11 @@ export default function RootLayout({
   return (
     <html lang="en" className={`dark ${geistSans.variable} ${geistMono.variable}`}>
       <body className="antialiased">
-        <NuclearProvider>
-          <ModalProvider>{children}</ModalProvider>
-        </NuclearProvider>
+        <NativeBridgeProvider>
+          <NuclearProvider>
+            <ModalProvider>{children}</ModalProvider>
+          </NuclearProvider>
+        </NativeBridgeProvider>
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>

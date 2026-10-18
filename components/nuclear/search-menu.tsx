@@ -3,6 +3,8 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { AppWindow, CalendarRange, Search, SearchX, Target, X, type LucideIcon } from 'lucide-react'
 import { useNuclear } from '@/lib/nuclear-store'
+import { useNative } from '@/lib/native-bridge'
+import { appRowKey } from './native-apps'
 import { APP_CATEGORIES, INSTALLED_APPS } from '@/lib/nuclear-data'
 import type { PageKey } from '@/lib/nuclear-types'
 import { NAV_ITEMS } from './nav-items'
@@ -16,6 +18,10 @@ interface SearchResult {
   title: string
   subtitle: string
   icon: LucideIcon
+  /** Data-URL icon for apps reported by the desktop shell. */
+  iconUrl?: string
+  /** Set for apps from the desktop catalog so selecting one can scroll to its row. */
+  appName?: string
   page: PageKey
 }
 
@@ -30,6 +36,8 @@ function matches(query: string, ...fields: string[]) {
 
 export function SearchMenu({ onNavigate }: { onNavigate: (page: PageKey) => void }) {
   const { state } = useNuclear()
+  const { native, requestAppFocus } = useNative()
+  const nativeCatalog = native?.strict?.catalog
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
   const [activeIndex, setActiveIndex] = useState(0)
@@ -79,20 +87,31 @@ export function SearchMenu({ onNavigate }: { onNavigate: (page: PageKey) => void
     ]
 
     const allowed = new Set(state.allowlist)
-    const apps: SearchResult[] = INSTALLED_APPS.filter((a) =>
-      matches(q, a.name, CATEGORY_LABEL.get(a.category) ?? a.category),
-    ).map((a) => ({
-      id: `app-${a.id}`,
-      group: 'Apps',
-      title: a.name,
-      subtitle: `${CATEGORY_LABEL.get(a.category) ?? a.category} · ${allowed.has(a.id) ? 'Always allowed' : 'Blocked in focus'}`,
-      icon: AppWindow,
-      page: 'apps',
-    }))
+    const apps: SearchResult[] = nativeCatalog
+      ? nativeCatalog
+          .filter((a) => a.name.toLowerCase().includes(q))
+          .map((a) => ({
+            id: `app-native-${appRowKey(a.name)}`,
+            group: 'Apps',
+            title: a.name,
+            subtitle: a.blocked ? 'Blocked' : 'Allowed',
+            icon: AppWindow,
+            iconUrl: a.icon || undefined,
+            appName: a.name,
+            page: 'apps',
+          }))
+      : INSTALLED_APPS.filter((a) => matches(q, a.name, CATEGORY_LABEL.get(a.category) ?? a.category)).map((a) => ({
+          id: `app-${a.id}`,
+          group: 'Apps',
+          title: a.name,
+          subtitle: `${CATEGORY_LABEL.get(a.category) ?? a.category} · ${allowed.has(a.id) ? 'Always allowed' : 'Blocked in focus'}`,
+          icon: AppWindow,
+          page: 'apps',
+        }))
 
     const all = [...pages, ...modes, ...apps]
     return GROUP_ORDER.flatMap((group) => all.filter((r) => r.group === group).slice(0, MAX_PER_GROUP))
-  }, [query, state.presets, state.standalone, state.allowlist])
+  }, [query, state.presets, state.standalone, state.allowlist, nativeCatalog])
 
   const safeIndex = Math.min(activeIndex, Math.max(results.length - 1, 0))
 
@@ -125,6 +144,7 @@ export function SearchMenu({ onNavigate }: { onNavigate: (page: PageKey) => void
   }, [safeIndex, open, listId])
 
   const select = (result: SearchResult) => {
+    if (result.appName) requestAppFocus(result.appName)
     onNavigate(result.page)
     setOpen(false)
     setQuery('')
@@ -248,7 +268,12 @@ export function SearchMenu({ onNavigate }: { onNavigate: (page: PageKey) => void
                           isActive && 'border-primary/30 text-primary',
                         )}
                       >
-                        <Icon className="size-3.5" />
+                        {result.iconUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={result.iconUrl} alt="" className="size-4 object-contain" />
+                        ) : (
+                          <Icon className="size-3.5" />
+                        )}
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-medium">{result.title}</span>
