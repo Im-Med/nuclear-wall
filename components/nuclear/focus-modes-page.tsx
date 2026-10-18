@@ -49,7 +49,18 @@ export function FocusModesPage() {
           Standalone modes run on their own, independent of your weekly schedule. Switch one on and its rules apply
           immediately.
         </p>
-        <button type="button" onClick={() => openModal({ type: 'new-mode', scope: 'standalone' })} className={btnPrimary}>
+        <button
+          type="button"
+          onClick={() =>
+            openModal({
+              type: 'pin',
+              title: 'Add standalone mode',
+              description: 'Enter your admin PIN to create a new mode.',
+              onConfirm: () => openModal({ type: 'new-mode', scope: 'standalone' }),
+            })
+          }
+          className={btnPrimary}
+        >
           <Plus className="size-4" />
           Add Standalone Mode
         </button>

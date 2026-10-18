@@ -1,6 +1,6 @@
 'use client'
 
-import { Check, Eraser, Lock, Plus, Trash2 } from 'lucide-react'
+import { Eraser, Lock, Plus, Trash2 } from 'lucide-react'
 import { ModeCard, KIND_DOT } from './mode-card'
 import { useModal } from './modal-provider'
 import { Toggle } from './toggle'
@@ -41,17 +41,17 @@ export function SchedulePage() {
   const exclusiveBlock = !enabled && (commitmentActive || standaloneActiveCount > 0)
   const toggleDisabled = exclusiveBlock || (enabled && scheduleLocked)
 
+  const requirePin = (title: string, description: string, onConfirm: () => void) =>
+    openModal({ type: 'pin', title, description, onConfirm })
+
   const onToggle = (next: boolean) => {
     if (next) {
       setScheduleEnabled(true)
       return
     }
-    openModal({
-      type: 'pin',
-      title: 'Turn off Weekly Schedule',
-      description: 'Enter your admin PIN to disable the schedule.',
-      onConfirm: () => setScheduleEnabled(false),
-    })
+    requirePin('Turn off Weekly Schedule', 'Enter your admin PIN to disable the schedule.', () =>
+      setScheduleEnabled(false),
+    )
   }
 
   return (
@@ -122,35 +122,31 @@ export function SchedulePage() {
             type="button"
             disabled={scheduleLocked || activePreset.modes.length === 0}
             onClick={() =>
-              openModal({
-                type: 'confirm',
-                title: `Clear ${activePreset.name}?`,
-                description: 'This removes every mode from this weekly schedule. The preset itself is kept.',
-                confirmLabel: 'Clear schedule',
-                onConfirm: () => clearPreset(activePreset.id),
-              })
+              requirePin(
+                'Delete weekly schedule',
+                `Enter your admin PIN to remove every mode from ${activePreset.name}. The schedule itself is kept.`,
+                () => clearPreset(activePreset.id),
+              )
             }
             className={btnSecondary}
           >
             <Eraser className="size-4" />
-            Clear Schedule
+            Delete Weekly Schedule
           </button>
           <button
             type="button"
             disabled={scheduleLocked || state.presets.length <= 1}
             onClick={() =>
-              openModal({
-                type: 'confirm',
-                title: `Delete ${activePreset.name}?`,
-                description: 'This permanently deletes this weekly schedule and all its modes.',
-                confirmLabel: 'Delete schedule',
-                onConfirm: () => deletePreset(activePreset.id),
-              })
+              requirePin(
+                `Delete ${activePreset.name}`,
+                'Enter your admin PIN to permanently delete this schedule and all its modes.',
+                () => deletePreset(activePreset.id),
+              )
             }
             className={cn(btnSecondary, 'text-destructive hover:text-destructive')}
           >
             <Trash2 className="size-4" />
-            Delete Schedule
+            Delete This Schedule
           </button>
           {state.presets.length <= 1 && (
             <p className="self-center text-xs text-muted-foreground">At least one schedule must remain.</p>
@@ -172,46 +168,82 @@ export function SchedulePage() {
         )}
       </section>
 
-      <WrittenSchedule />
-
       <section className="flex flex-col gap-4" aria-label="Preset modes">
         <div>
           <h2 className="text-lg font-semibold">Preset modes</h2>
-          <p className="text-sm text-muted-foreground">Add a ready-made mode to {activePreset.name} in one tap.</p>
+          <p className="text-sm text-muted-foreground">
+            Night, Game, Lock-In and Taki. Add one to {activePreset.name}, then switch it on to show it in the schedule
+            or off to hide it. Changes need your admin PIN.
+          </p>
         </div>
         <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {BUILT_IN_KINDS.map((b) => {
-            const added = activePreset.modes.some((m) => m.kind === b.kind)
+            const added = activePreset.modes.find((m) => m.kind === b.kind)
+            const on = added?.enabled === true
             return (
-              <li key={b.kind} className="neo-card flex items-center gap-3 rounded-2xl border border-border p-4">
-                <span className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-border bg-sidebar text-xl">
-                  {b.emoji}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-semibold">{b.label}</p>
-                  <p className="truncate text-xs text-muted-foreground">{b.blurb}</p>
-                </div>
-                {added ? (
-                  <span className="inline-flex items-center gap-1 text-xs font-medium text-primary">
-                    <Check className="size-4" />
-                    Added
-                  </span>
-                ) : (
-                  <button
-                    type="button"
-                    disabled={scheduleLocked}
-                    onClick={() => addBuiltInMode(b.kind)}
-                    aria-label={`Add ${b.label}`}
-                    className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-primary/40 text-primary transition hover:bg-primary/10 disabled:opacity-50"
-                  >
-                    <Plus className="size-4" />
-                  </button>
+              <li
+                key={b.kind}
+                className={cn(
+                  'neo-card flex flex-col gap-3 rounded-2xl border p-4 transition',
+                  on ? 'border-primary/40 shadow-[0_0_24px_-12px_var(--primary)]' : 'border-border',
                 )}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-border bg-sidebar text-xl">
+                    {b.emoji}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-semibold">{b.label}</p>
+                    <p className="truncate text-xs text-muted-foreground">{b.blurb}</p>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between gap-3 border-t border-border pt-3">
+                  {added ? (
+                    <div className="flex items-center gap-2">
+                      <Toggle
+                        checked={on}
+                        onChange={(next) =>
+                          requirePin(
+                            `${next ? 'Show' : 'Hide'} ${added.name}`,
+                            `Enter your admin PIN to ${next ? 'show' : 'hide'} this mode in the schedule.`,
+                            () => setModeEnabled(added.id, next),
+                          )
+                        }
+                        disabled={scheduleLocked}
+                        label={`Show ${added.name} in schedule`}
+                      />
+                      <span className={cn('text-xs font-medium', on ? 'text-primary' : 'text-muted-foreground')}>
+                        {on ? 'In schedule' : 'Hidden'}
+                      </span>
+                    </div>
+                  ) : (
+                    <>
+                      <span className="text-xs text-muted-foreground">Not added</span>
+                      <button
+                        type="button"
+                        disabled={scheduleLocked}
+                        onClick={() =>
+                          requirePin(
+                            `Add ${b.label}`,
+                            `Enter your admin PIN to add ${b.label} to ${activePreset.name}.`,
+                            () => addBuiltInMode(b.kind),
+                          )
+                        }
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-primary/40 px-3 py-1.5 text-xs font-medium text-primary transition hover:bg-primary/10 disabled:opacity-50"
+                      >
+                        <Plus className="size-3.5" />
+                        Add
+                      </button>
+                    </>
+                  )}
+                </div>
               </li>
             )
           })}
         </ul>
       </section>
+
+      <WrittenSchedule />
 
       <section className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -224,7 +256,11 @@ export function SchedulePage() {
           <button
             type="button"
             disabled={scheduleLocked}
-            onClick={() => openModal({ type: 'new-mode', scope: 'schedule' })}
+            onClick={() =>
+              requirePin('Add mode to schedule', 'Enter your admin PIN to create a new mode.', () =>
+                openModal({ type: 'new-mode', scope: 'schedule' }),
+              )
+            }
             className={btnPrimary}
           >
             <Plus className="size-4" />
@@ -243,7 +279,13 @@ export function SchedulePage() {
                   <div className="flex items-center gap-2">
                     <Toggle
                       checked={m.enabled}
-                      onChange={(next) => setModeEnabled(m.id, next)}
+                      onChange={(next) =>
+                        requirePin(
+                          `${next ? 'Show' : 'Hide'} ${m.name}`,
+                          `Enter your admin PIN to ${next ? 'show' : 'hide'} this mode in the schedule.`,
+                          () => setModeEnabled(m.id, next),
+                        )
+                      }
                       disabled={scheduleLocked}
                       label={`Show ${m.name} in schedule`}
                     />
@@ -258,13 +300,11 @@ export function SchedulePage() {
                     disabled={scheduleLocked}
                     aria-label={`Delete ${m.name}`}
                     onClick={() =>
-                      openModal({
-                        type: 'confirm',
-                        title: `Delete ${m.name}?`,
-                        description: 'This permanently removes the mode from this schedule.',
-                        confirmLabel: 'Delete mode',
-                        onConfirm: () => deleteMode('schedule', m.id),
-                      })
+                      requirePin(
+                        `Delete ${m.name}`,
+                        'Enter your admin PIN to permanently remove this mode from the schedule.',
+                        () => deleteMode('schedule', m.id),
+                      )
                     }
                     className="inline-flex size-8 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
                   >
